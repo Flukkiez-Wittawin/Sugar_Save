@@ -856,6 +856,47 @@
         }
       }
 
+      async function loadFromSheet() {
+        if (!SHEET_API_URL) return;
+        setSyncStatus("syncing", "กำลังโหลดข้อมูลจาก Google Sheets...");
+        try {
+          const res = await fetch(SHEET_API_URL);
+          const json = await res.json();
+          if (json.status === "ok" && Array.isArray(json.records)) {
+            const localRecords = loadRecords();
+            const localIds = new Set(localRecords.map((r) => String(r.id)));
+
+            let added = 0;
+            json.records.forEach((sr) => {
+              if (!localIds.has(String(sr.id))) {
+                localRecords.push({
+                  id: Number(sr.id),
+                  value: Number(sr.value),
+                  date: String(sr.date),
+                  time: String(sr.time),
+                  timestamp: String(sr.timestamp),
+                });
+                added++;
+              }
+            });
+
+            if (added > 0) {
+              saveRecords(localRecords);
+              render(document.getElementById("filterDate").value);
+            }
+            setSyncStatus(
+              "idle",
+              `✅ โหลดจาก Sheets แล้ว (${json.records.length} รายการ)`,
+            );
+          } else {
+            setSyncStatus("error", "⚠️ โหลดข้อมูลไม่สำเร็จ");
+          }
+        } catch (err) {
+          console.error("Sheet load error:", err);
+          setSyncStatus("error", "⚠️ โหลดข้อมูลจาก Sheets ไม่สำเร็จ");
+        }
+      }
+
       function addRecord(value, customDateStr) {
         let targetDate;
         if (customDateStr) {
@@ -1059,9 +1100,9 @@
       render("");
       sugarInput.focus();
 
-      // Check Sheets config on load
+      // Load data from Google Sheets on startup
       if (SHEET_API_URL) {
-        setSyncStatus("idle", "✅ เชื่อมต่อ Google Sheets แล้ว");
+        loadFromSheet();
       }
     </script>
   </body>
