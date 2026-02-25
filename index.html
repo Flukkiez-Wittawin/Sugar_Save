@@ -787,7 +787,7 @@
       // ── Config ──
       // 👇 วาง URL ของ Google Apps Script Web App ที่นี่
       const SHEET_API_URL =
-        "https://script.google.com/macros/s/AKfycbzSg-kBOz9xEiXlykl8nBHpMAgCDZmQ4D62EKHkvRd6seXNvz1ZuBpvEz2n-HUyQxvP/exec";
+        "https://script.google.com/macros/s/AKfycby_HmAkTHkPF4nntBIULAo4q_XQFHYBiJmvpk6kKAQN5wrQj1L_diuff5tApRX9caE/exec";
 
       // ── Data Layer ──
       const STORAGE_KEY = "sugarsave_records";
@@ -862,20 +862,25 @@
         let time = String(sr.time || "");
         let timestamp = String(sr.timestamp || "");
 
-        // If timestamp looks like a valid ISO date, use it as the canonical source
+        // Try timestamp first as canonical source
         const ts = new Date(timestamp);
         if (!isNaN(ts) && ts.getFullYear() > 1900) {
-          date = ts.toLocaleDateString("en-CA"); // YYYY-MM-DD
+          date = ts.toLocaleDateString("en-CA");
           time = ts.toLocaleTimeString("th-TH", {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
           });
           timestamp = ts.toISOString();
+        } else if (
+          date.match(/^\d{4}-\d{2}-\d{2}$/) &&
+          time.match(/^\d{2}:\d{2}/)
+        ) {
+          // date and time are already clean strings (from fixed Apps Script)
+          timestamp = new Date(date + "T" + time).toISOString();
         } else {
-          // Fallback: try to reconstruct from date + time fields
+          // Fallback: try to parse date field
           if (date && !date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            // date might be an ISO string from Sheets like "2026-02-25T00:00:00.000Z"
             const pd = new Date(date);
             if (!isNaN(pd) && pd.getFullYear() > 1900) {
               date = pd.toLocaleDateString("en-CA");
@@ -883,8 +888,8 @@
               date = new Date().toLocaleDateString("en-CA");
             }
           }
+          // Fallback: try to parse time field (might be 1899-12-30 serial)
           if (time && !time.match(/^\d{2}:\d{2}/)) {
-            // time might be "1899-12-30T14:30:00.000Z" (Sheets time serial)
             const pt = new Date(time);
             if (!isNaN(pt)) {
               time = pt.toLocaleTimeString("th-TH", {
@@ -896,7 +901,9 @@
               time = "00:00:00";
             }
           }
-          timestamp = new Date(date + "T" + time).toISOString();
+          if (!timestamp || isNaN(new Date(timestamp))) {
+            timestamp = new Date(date + "T" + time).toISOString();
+          }
         }
 
         return {
@@ -915,24 +922,13 @@
           const res = await fetch(SHEET_API_URL);
           const json = await res.json();
           if (json.status === "ok" && Array.isArray(json.records)) {
-            const localRecords = loadRecords();
-            const localIds = new Set(localRecords.map((r) => String(r.id)));
-
-            let added = 0;
-            json.records.forEach((sr) => {
-              if (!localIds.has(String(sr.id))) {
-                localRecords.push(parseSheetRecord(sr));
-                added++;
-              }
-            });
-
-            if (added > 0) {
-              saveRecords(localRecords);
-              render(document.getElementById("filterDate").value);
-            }
+            // Use Sheet as source of truth — replace localStorage
+            const sheetRecords = json.records.map((sr) => parseSheetRecord(sr));
+            saveRecords(sheetRecords);
+            render(document.getElementById("filterDate").value);
             setSyncStatus(
               "idle",
-              `✅ โหลดจาก Sheets แล้ว (${json.records.length} รายการ)`,
+              `✅ โหลดจาก Sheets แล้ว (${sheetRecords.length} รายการ)`,
             );
           } else {
             setSyncStatus("error", "⚠️ โหลดข้อมูลไม่สำเร็จ");
