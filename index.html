@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SugarSave — บันทึกค่าน้ำตาล</title>
+    <meta
+      name="description"
+      content="แอปบันทึกค่าน้ำตาลในเลือดประจำวัน พร้อมกราฟและตัวกรองวันที่"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ── Reset & Tokens ── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #0b0f1a;
+        --surface: #131829;
+        --surface2: #1a2035;
+        --border: rgba(255, 255, 255, 0.06);
+        --text: #e4e8f1;
+        --text-dim: #7a829a;
+        --accent: #6c5ce7;
+        --accent-glow: rgba(108, 92, 231, 0.35);
+        --green: #00cec9;
+        --green-glow: rgba(0, 206, 201, 0.25);
+        --yellow: #ffc048;
+        --red: #ff6b6b;
+        --red-glow: rgba(255, 107, 107, 0.2);
+        --radius: 16px;
+        --radius-sm: 10px;
+        --font: "Inter", "Noto Sans Thai", sans-serif;
+        --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+
+      /* ── Animated Background ── */
+      body::before {
+        content: "";
+        position: fixed;
+        top: -40%;
+        left: -20%;
+        width: 80vw;
+        height: 80vw;
+        background: radial-gradient(
+          circle,
+          var(--accent-glow) 0%,
+          transparent 70%
+        );
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 0;
+        animation: floatBlob 20s ease-in-out infinite alternate;
+      }
+
+      body::after {
+        content: "";
+        position: fixed;
+        bottom: -30%;
+        right: -10%;
+        width: 60vw;
+        height: 60vw;
+        background: radial-gradient(
+          circle,
+          var(--green-glow) 0%,
+          transparent 70%
+        );
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 0;
+        animation: floatBlob 25s ease-in-out infinite alternate-reverse;
+      }
+
+      @keyframes floatBlob {
+        0% {
+          transform: translate(0, 0) scale(1);
+        }
+
+        100% {
+          transform: translate(60px, 40px) scale(1.15);
+        }
+      }
+
+      /* ── Layout ── */
+      .app {
+        position: relative;
+        z-index: 1;
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 24px 16px 80px;
+      }
+
+      /* ── Header ── */
+      .header {
+        text-align: center;
+        padding: 32px 0 24px;
+      }
+
+      .header .logo {
+        font-size: 42px;
+        margin-bottom: 4px;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+
+        50% {
+          transform: scale(1.1);
+        }
+      }
+
+      .header h1 {
+        font-size: 28px;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--accent), var(--green));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: -0.5px;
+      }
+
+      .header p {
+        color: var(--text-dim);
+        font-size: 14px;
+        margin-top: 4px;
+      }
+
+      .sync-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        margin-top: 8px;
+        transition: all var(--transition);
+      }
+      .sync-status.idle {
+        background: rgba(0, 206, 201, 0.1);
+        color: var(--green);
+      }
+      .sync-status.syncing {
+        background: rgba(108, 92, 231, 0.15);
+        color: #a78bfa;
+      }
+      .sync-status.error {
+        background: var(--red-glow);
+        color: var(--red);
+      }
+      .sync-status.no-url {
+        background: rgba(255, 192, 72, 0.15);
+        color: var(--yellow);
+      }
+      .sync-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .sync-status.idle .sync-dot {
+        background: var(--green);
+      }
+      .sync-status.syncing .sync-dot {
+        background: #a78bfa;
+        animation: blink 1s ease-in-out infinite;
+      }
+      .sync-status.error .sync-dot {
+        background: var(--red);
+      }
+      .sync-status.no-url .sync-dot {
+        background: var(--yellow);
+      }
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      /* ── Card ── */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(12px);
+        transition:
+          transform var(--transition),
+          box-shadow var(--transition);
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+
+      /* ── Input Section ── */
+      .input-section {
+        display: flex;
+        gap: 12px;
+        align-items: stretch;
+      }
+
+      .input-wrap {
+        flex: 1;
+        position: relative;
+      }
+
+      .input-wrap input {
+        width: 100%;
+        height: 56px;
+        background: var(--surface2);
+        border: 2px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 22px;
+        font-weight: 600;
+        padding: 0 16px;
+        text-align: center;
+        outline: none;
+        transition:
+          border-color var(--transition),
+          box-shadow var(--transition);
+      }
+
+      .input-wrap input::placeholder {
+        color: var(--text-dim);
+        font-size: 15px;
+        font-weight: 400;
+      }
+
+      .input-wrap input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-glow);
+      }
+
+      .input-wrap .unit {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 13px;
+        color: var(--text-dim);
+        pointer-events: none;
+      }
+
+      .btn-save {
+        height: 56px;
+        padding: 0 24px;
+        background: linear-gradient(135deg, var(--accent), #a78bfa);
+        border: none;
+        border-radius: var(--radius-sm);
+        color: #fff;
+        font-family: var(--font);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition:
+          transform var(--transition),
+          box-shadow var(--transition);
+        white-space: nowrap;
+      }
+
+      .btn-save:hover {
+        transform: scale(1.04);
+        box-shadow: 0 4px 20px var(--accent-glow);
+      }
+
+      .btn-save:active {
+        transform: scale(0.97);
+      }
+
+      .btn-save .icon {
+        font-size: 18px;
+      }
+
+      .custom-date-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+      }
+      .custom-date-row label {
+        font-size: 13px;
+        color: var(--text-dim);
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .custom-date-row input[type="datetime-local"] {
+        flex: 1;
+        height: 40px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 13px;
+        padding: 0 12px;
+        outline: none;
+        transition: border-color var(--transition);
+      }
+      .custom-date-row input[type="datetime-local"]:focus {
+        border-color: var(--accent);
+      }
+      .btn-now {
+        height: 40px;
+        padding: 0 14px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-dim);
+        font-family: var(--font);
+        font-size: 12px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background var(--transition),
+          color var(--transition);
+      }
+      .btn-now:hover {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+
+      /* ── Toast ── */
+      .toast {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-100px);
+        background: var(--surface);
+        border: 1px solid var(--green);
+        border-radius: var(--radius-sm);
+        padding: 12px 24px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--green);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        z-index: 100;
+        opacity: 0;
+        transition:
+          transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+          opacity 0.4s;
+      }
+
+      .toast.show {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+
+      /* ── Filter ── */
+      .filter-section {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .filter-section label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+
+      .filter-section input[type="date"] {
+        flex: 1;
+        height: 44px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+        padding: 0 12px;
+        outline: none;
+        transition: border-color var(--transition);
+      }
+
+      .filter-section input[type="date"]:focus {
+        border-color: var(--accent);
+      }
+
+      .btn-clear {
+        height: 44px;
+        padding: 0 16px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-dim);
+        font-family: var(--font);
+        font-size: 13px;
+        cursor: pointer;
+        transition:
+          background var(--transition),
+          color var(--transition);
+      }
+
+      .btn-clear:hover {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+
+      /* ── Stats Row ── */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 16px 12px;
+        text-align: center;
+        transition: transform var(--transition);
+      }
+
+      .stat-card:hover {
+        transform: translateY(-2px);
+      }
+
+      .stat-card .stat-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--text-dim);
+        margin-bottom: 4px;
+      }
+
+      .stat-card .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .stat-card .stat-unit {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+
+      .stat-card.avg .stat-value {
+        color: var(--accent);
+      }
+
+      .stat-card.min .stat-value {
+        color: var(--green);
+      }
+
+      .stat-card.max .stat-value {
+        color: var(--yellow);
+      }
+
+      /* ── Records List ── */
+      .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .section-title .count {
+        background: var(--surface2);
+        font-size: 12px;
+        font-weight: 500;
+        padding: 2px 10px;
+        border-radius: 20px;
+        color: var(--text-dim);
+      }
+
+      .day-group {
+        margin-bottom: 20px;
+        animation: fadeIn 0.4s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .day-header {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        margin-bottom: 8px;
+        padding-left: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .day-header .dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent);
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .record {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 14px 18px;
+        margin-bottom: 8px;
+        transition:
+          transform var(--transition),
+          background var(--transition);
+        animation: slideIn 0.35s ease;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(-16px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      .record:hover {
+        background: var(--surface2);
+        transform: translateX(4px);
+      }
+
+      .record .time {
+        font-size: 13px;
+        color: var(--text-dim);
+        font-weight: 500;
+        min-width: 60px;
+      }
+
+      .record .value {
+        font-size: 22px;
+        font-weight: 700;
+        margin: 0 auto;
+      }
+
+      .record .value .mg {
+        font-size: 12px;
+        color: var(--text-dim);
+        font-weight: 400;
+      }
+
+      .record .badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 20px;
+        min-width: 50px;
+        text-align: center;
+      }
+
+      .badge.normal {
+        background: rgba(0, 206, 201, 0.15);
+        color: var(--green);
+      }
+
+      .badge.high {
+        background: rgba(255, 192, 72, 0.15);
+        color: var(--yellow);
+      }
+
+      .badge.danger {
+        background: var(--red-glow);
+        color: var(--red);
+      }
+
+      .badge.low {
+        background: rgba(108, 92, 231, 0.15);
+        color: #a78bfa;
+      }
+
+      .record .btn-delete {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 16px;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition:
+          color var(--transition),
+          background var(--transition);
+        margin-left: 8px;
+      }
+
+      .record .btn-delete:hover {
+        color: var(--red);
+        background: var(--red-glow);
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--text-dim);
+      }
+
+      .empty-state .empty-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+      }
+
+      .empty-state p {
+        font-size: 14px;
+      }
+
+      /* ── Responsive ── */
+      @media (max-width: 480px) {
+        .app {
+          padding: 16px 12px 80px;
+        }
+
+        .header h1 {
+          font-size: 24px;
+        }
+
+        .input-wrap input {
+          font-size: 18px;
+          height: 50px;
+        }
+
+        .btn-save {
+          height: 50px;
+          padding: 0 18px;
+          font-size: 14px;
+        }
+
+        .stats {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+        }
+
+        .stat-card .stat-value {
+          font-size: 20px;
+        }
+
+        .record .value {
+          font-size: 18px;
+        }
+      }
+
+      /* scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: var(--surface2);
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Toast notification -->
+    <div class="toast" id="toast">✅ บันทึกเรียบร้อย!</div>
+
+    <div class="app">
+      <!-- Header -->
+      <header class="header">
+        <div class="logo">🩸</div>
+        <h1>SugarSave</h1>
+        <p>บันทึกค่าน้ำตาลในเลือดของคุณ</p>
+        <div class="sync-status no-url" id="syncStatus">
+          <span class="sync-dot"></span>
+          <span id="syncText">ยังไม่ได้ตั้งค่า Google Sheets</span>
+        </div>
+      </header>
+
+      <!-- Input Card -->
+      <div class="card">
+        <div class="input-section">
+          <div class="input-wrap">
+            <input
+              type="number"
+              id="sugarInput"
+              placeholder="กรอกค่าน้ำตาล..."
+              min="0"
+              max="999"
+            />
+            <span class="unit">mg/dL</span>
+          </div>
+          <button class="btn-save" id="btnSave">
+            <span class="icon">💾</span> บันทึก
+          </button>
+        </div>
+        <div class="custom-date-row">
+          <label>📅 วันที่:</label>
+          <input type="datetime-local" id="customDate" />
+          <button type="button" class="btn-now" id="btnNow">ตอนนี้</button>
+        </div>
+      </div>
+
+      <!-- Filter Card -->
+      <div class="card">
+        <div class="filter-section">
+          <label>📅 กรองวันที่:</label>
+          <input type="date" id="filterDate" />
+          <button class="btn-clear" id="btnClear">ทั้งหมด</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats" id="statsRow">
+        <div class="stat-card avg">
+          <div class="stat-label">ค่าเฉลี่ย</div>
+          <div class="stat-value" id="statAvg">—</div>
+          <div class="stat-unit">mg/dL</div>
+        </div>
+        <div class="stat-card min">
+          <div class="stat-label">ต่ำสุด</div>
+          <div class="stat-value" id="statMin">—</div>
+          <div class="stat-unit">mg/dL</div>
+        </div>
+        <div class="stat-card max">
+          <div class="stat-label">สูงสุด</div>
+          <div class="stat-value" id="statMax">—</div>
+          <div class="stat-unit">mg/dL</div>
+        </div>
+      </div>
+
+      <!-- Records -->
+      <div class="section-title">
+        📋 รายการบันทึก <span class="count" id="recordCount">0</span>
+      </div>
+      <div id="recordsList"></div>
+    </div>
+
+    <script>
+      // ── Config ──
+      // 👇 วาง URL ของ Google Apps Script Web App ที่นี่
+      const SHEET_API_URL =
+        "https://script.google.com/macros/s/AKfycbxMskIthHT62DUrUKZh6CJr-LkIu4Jpnyh1oCUg9t3KD6GCPX24-PA3RX7Kp846yw2n/exec";
+
+      // ── Data Layer ──
+      const STORAGE_KEY = "sugarsave_records";
+
+      function loadRecords() {
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveRecords(records) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      }
+
+      // ── Sync Status ──
+      function setSyncStatus(state, text) {
+        const el = document.getElementById("syncStatus");
+        const txt = document.getElementById("syncText");
+        el.className = "sync-status " + state;
+        txt.textContent = text;
+      }
+
+      // ── Google Sheets API ──
+      async function sendToSheet(record) {
+        if (!SHEET_API_URL) return;
+        setSyncStatus("syncing", "กำลังบันทึกไป Google Sheets...");
+        try {
+          const lvl = getLevel(record.value);
+          await fetch(SHEET_API_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "add",
+              id: record.id,
+              date: record.date,
+              time: record.time,
+              value: record.value,
+              level: lvl.label,
+              timestamp: record.timestamp,
+            }),
+          });
+          setSyncStatus("idle", "✅ ซิงค์กับ Google Sheets แล้ว");
+        } catch (err) {
+          console.error("Sheet sync error:", err);
+          setSyncStatus("error", "⚠️ ซิงค์ไม่สำเร็จ");
+        }
+      }
+
+      async function deleteFromSheet(id) {
+        if (!SHEET_API_URL) return;
+        setSyncStatus("syncing", "กำลังลบจาก Google Sheets...");
+        try {
+          await fetch(SHEET_API_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete", id }),
+          });
+          setSyncStatus("idle", "✅ ซิงค์กับ Google Sheets แล้ว");
+        } catch (err) {
+          console.error("Sheet delete error:", err);
+          setSyncStatus("error", "⚠️ ซิงค์ไม่สำเร็จ");
+        }
+      }
+
+      function addRecord(value, customDateStr) {
+        let targetDate;
+        if (customDateStr) {
+          targetDate = new Date(customDateStr);
+        } else {
+          targetDate = new Date();
+        }
+        const record = {
+          id: Date.now(),
+          value: parseFloat(value),
+          timestamp: targetDate.toISOString(),
+          date: targetDate.toLocaleDateString("en-CA"), // YYYY-MM-DD
+          time: targetDate.toLocaleTimeString("th-TH", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        };
+        const records = loadRecords();
+        records.unshift(record);
+        saveRecords(records);
+        // Fire-and-forget sync to Google Sheets
+        sendToSheet(record);
+        return record;
+      }
+
+      function deleteRecord(id) {
+        const records = loadRecords().filter((r) => r.id !== id);
+        saveRecords(records);
+        // Fire-and-forget sync to Google Sheets
+        deleteFromSheet(id);
+      }
+
+      // ── Helpers ──
+      function getLevel(val) {
+        if (val < 80) return { label: "ต่ำ", cls: "low" };
+        return val <= 130
+          ? { label: "ปกติ", cls: "normal" }
+          : { label: "สูง", cls: "high" };
+        return { label: "อันตราย", cls: "danger" };
+      }
+
+      function formatThaiDate(dateStr) {
+        const d = new Date(dateStr + "T00:00:00");
+        const months = [
+          "ม.ค.",
+          "ก.พ.",
+          "มี.ค.",
+          "เม.ย.",
+          "พ.ค.",
+          "มิ.ย.",
+          "ก.ค.",
+          "ส.ค.",
+          "ก.ย.",
+          "ต.ค.",
+          "พ.ย.",
+          "ธ.ค.",
+        ];
+        const days = [
+          "อาทิตย์",
+          "จันทร์",
+          "อังคาร",
+          "พุธ",
+          "พฤหัสบดี",
+          "ศุกร์",
+          "เสาร์",
+        ];
+        return `วัน${days[d.getDay()]}ที่ ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear() + 543}`;
+      }
+
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg || "✅ บันทึกเรียบร้อย!";
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 2200);
+      }
+
+      // ── Render ──
+      function render(filterDate) {
+        let records = loadRecords();
+        if (filterDate) {
+          records = records.filter((r) => r.date === filterDate);
+        }
+
+        // Stats
+        const vals = records.map((r) => r.value);
+        document.getElementById("statAvg").textContent = vals.length
+          ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+          : "—";
+        document.getElementById("statMin").textContent = vals.length
+          ? Math.min(...vals)
+          : "—";
+        document.getElementById("statMax").textContent = vals.length
+          ? Math.max(...vals)
+          : "—";
+        document.getElementById("recordCount").textContent = records.length;
+
+        // Group by date
+        const groups = {};
+        records.forEach((r) => {
+          if (!groups[r.date]) groups[r.date] = [];
+          groups[r.date].push(r);
+        });
+
+        const container = document.getElementById("recordsList");
+
+        if (records.length === 0) {
+          container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <p>${filterDate ? "ไม่พบข้อมูลในวันที่เลือก" : "ยังไม่มีข้อมูล — เริ่มบันทึกค่าน้ำตาลกันเลย!"}</p>
+          </div>`;
+          return;
+        }
+
+        // Sort dates descending (newest day first)
+        const sortedDates = Object.keys(groups).sort((a, b) =>
+          b.localeCompare(a),
+        );
+
+        // Sort records within each day ascending (morning → afternoon)
+        sortedDates.forEach((date) => {
+          groups[date].sort(
+            (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+          );
+        });
+
+        let html = "";
+        sortedDates.forEach((date) => {
+          html += `<div class="day-group">
+          <div class="day-header"><span class="dot"></span>${formatThaiDate(date)}</div>`;
+
+          groups[date].forEach((r) => {
+            const lv = getLevel(r.value);
+            html += `
+          <div class="record">
+            <span class="time">🕐 ${r.time}</span>
+            <span class="value">${r.value} <span class="mg">mg/dL</span></span>
+            <span class="badge ${lv.cls}">${lv.label}</span>
+            <button class="btn-delete" data-id="${r.id}" title="ลบ">🗑️</button>
+          </div>`;
+          });
+
+          html += "</div>";
+        });
+
+        container.innerHTML = html;
+
+        // Attach delete handlers
+        container.querySelectorAll(".btn-delete").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            if (confirm("ต้องการลบรายการนี้?")) {
+              deleteRecord(parseInt(btn.dataset.id));
+              render(document.getElementById("filterDate").value);
+              showToast("🗑️ ลบเรียบร้อย");
+            }
+          });
+        });
+      }
+
+      // ── Events ──
+      const sugarInput = document.getElementById("sugarInput");
+      const btnSave = document.getElementById("btnSave");
+      const filterDate = document.getElementById("filterDate");
+      const btnClear = document.getElementById("btnClear");
+      const customDate = document.getElementById("customDate");
+      const btnNow = document.getElementById("btnNow");
+
+      function doSave() {
+        const val = sugarInput.value.trim();
+        if (!val || isNaN(val) || parseFloat(val) <= 0) {
+          sugarInput.focus();
+          sugarInput.style.borderColor = "var(--red)";
+          setTimeout(() => (sugarInput.style.borderColor = ""), 1000);
+          return;
+        }
+        addRecord(val, customDate.value || null);
+        sugarInput.value = "";
+        customDate.value = "";
+        sugarInput.focus();
+        render(filterDate.value);
+        showToast();
+      }
+
+      btnNow.addEventListener("click", () => {
+        customDate.value = "";
+      });
+
+      btnSave.addEventListener("click", doSave);
+      sugarInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doSave();
+      });
+
+      filterDate.addEventListener("change", () => render(filterDate.value));
+      btnClear.addEventListener("click", () => {
+        filterDate.value = "";
+        render("");
+      });
+
+      // ── Init ──
+      render("");
+      sugarInput.focus();
+
+      // Check Sheets config on load
+      if (SHEET_API_URL) {
+        setSyncStatus("idle", "✅ เชื่อมต่อ Google Sheets แล้ว");
+      }
+    </script>
+  </body>
+</html>
